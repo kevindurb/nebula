@@ -3,6 +3,8 @@
 version: '3'
 
 vars:
+  CHOWN: root:root
+  ETC_NEBULA: /etc/nebula
   NODES:
     map:
       lighthouse-01: 10.10.0.1/16
@@ -28,14 +30,17 @@ tasks:
       IP: '{{ get .NODES .NAME }}'
     cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}"
 
-  deploy-node:*:
+  deploy-remote:*:
     requires:
       vars: [TYPE]
     vars:
       NAME: '{{ index .MATCH 0 }}'
     deps: ['sign:{{.NAME}}']
+    sources: [ca.crt, '{{.NAME}}.crt', '{{.NAME}}.key', '{{.TYPE}}.yml']
     cmds:
-      - rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml" {{.NAME}}:/tmp/
+      - >
+        rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml"
+        {{.NAME}}:/tmp/
       - |
         ssh {{.NAME}} "
           sudo mv /tmp/ca.crt /etc/nebula/
@@ -46,3 +51,23 @@ tasks:
           sudo systemctl enable --now nebula
           sudo systemctl restart nebula
         "
+
+  deploy-local:*:
+    requires:
+      vars: [TYPE]
+    vars:
+      NAME: '{{ index .MATCH 0 }}'
+    deps: ['sign:{{.NAME}}']
+    sources: [ca.crt, '{{.NAME}}.crt', '{{.NAME}}.key', '{{.TYPE}}.yml']
+    generates:
+      - '{{.ETC_NEBULA}}/config.yml'
+      - '{{.ETC_NEBULA}}/host.crt'
+      - '{{.ETC_NEBULA}}/host.key'
+      - '{{.ETC_NEBULA}}/ca.crt'
+    cmds:
+      - sudo mkdir -p {{.ETC_NEBULA}}
+      - sudo cp ca.crt {{.ETC_NEBULA}}
+      - sudo cp {{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
+      - sudo cp {{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
+      - sudo cp {{.NAME}}.key {{.ETC_NEBULA}}/host.key
+      - sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
