@@ -13,9 +13,36 @@ vars:
 
 tasks:
   make:ca:
+    status:
+      - test -f ca.crt
+      - test -f ca.key
+    generates: [ca.crt, ca.key]
     cmd: nebula-cert ca -version 1 -name "Borg Collective"
+
   sign:*:
+    deps: [make:ca]
+    sources: [ca.crt, ca.key]
+    generates: ['{{.NAME}}.crt', '{{.NAME}}.key']
     vars:
       NAME: '{{ index .MATCH 0 }}'
       IP: '{{ get .NODES .NAME }}'
     cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}"
+
+  deploy-node:*:
+    requires:
+      vars: [TYPE]
+    vars:
+      NAME: '{{ index .MATCH 0 }}'
+    deps: ['sign:{{.NAME}}']
+    cmds:
+      - rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml" {{.NAME}}:/tmp/
+      - |
+        ssh {{.NAME}} "
+          sudo mv /tmp/ca.crt /etc/nebula/
+          sudo mv /tmp/{{.NAME}}.crt /etc/nebula/host.crt
+          sudo mv /tmp/{{.NAME}}.key /etc/nebula/host.key
+          sudo mv /tmp/{{.TYPE}}.yml /etc/nebula/config.yml
+          sudo chown -R root:root /etc/nebula
+          sudo systemctl enable --now nebula
+          sudo systemctl restart nebula
+        "
