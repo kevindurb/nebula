@@ -27,6 +27,18 @@ vars:
       drone-04: 10.10.42.24
 
 tasks:
+  conn:local:
+    internal: true
+    requires:
+      vars: [CMD]
+    cmd: '{{.CMD}}'
+
+  conn:ssh:
+    internal: true
+    requires:
+      vars: [HOST, CMD]
+    cmd: ssh {{.HOST}} "{{.CMD}}"
+
   make:ca:
     status:
       - test -f ca.crt
@@ -58,46 +70,29 @@ tasks:
       IP: '{{ get .NODES .NAME }}'
     cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}{{.SUFFIX}}"
 
-  deploy-remote:*:
+  deploy:*:*:
     requires:
       vars: [TYPE]
     vars:
-      NAME: '{{ index .MATCH 0 }}'
-    deps: ['sign:{{.NAME}}']
-    sources: [ca.crt, '{{.NAME}}.crt', '{{.NAME}}.key', '{{.TYPE}}.yml']
+      CONN: '{{ index .MATCH 0 }}'
+      HOST: '{{ index .MATCH 1 }}'
+      DEST: '{{if eq .CONN "ssh"}}{{.HOST}}:/tmp/{{else}}/tmp/{{end}}'
+    preconditions:
+      - sh: 'echo "{{.TYPE}}" | grep -E "^(lighthouse|node)$"'
+        msg: 'TYPE must be lighthouse or node'
+      - sh: 'echo "{{.CONN}}" | grep -E "^(local|ssh)$"'
+        msg: 'CONN must be local or ssh'
+    deps: ['sign:{{.HOST}}']
+    sources: [ca.crt, '{{.HOST}}.crt', '{{.HOST}}.key', '{{.TYPE}}.yml']
     cmds:
-      - >
-        rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml"
-        {{.NAME}}:/tmp/
-      - |
-        ssh {{.NAME}} "
-          sudo mkdir {{.ETC_NEBULA}}
-          sudo mv /tmp/ca.crt {{.ETC_NEBULA}}
-          sudo mv /tmp/{{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
-          sudo mv /tmp/{{.NAME}}.key {{.ETC_NEBULA}}/host.key
-          sudo mv /tmp/{{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
-          sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
-          sudo systemctl enable --now nebula
-          sudo systemctl restart nebula
-        "
-
-  deploy-local:*:
-    requires:
-      vars: [TYPE]
-    vars:
-      NAME: '{{ index .MATCH 0 }}'
-    deps: ['sign:{{.NAME}}']
-    sources: [ca.crt, '{{.NAME}}.crt', '{{.NAME}}.key', '{{.TYPE}}.yml']
-    generates:
-      - '{{.ETC_NEBULA}}/config.yml'
-      - '{{.ETC_NEBULA}}/host.crt'
-      - '{{.ETC_NEBULA}}/host.key'
-      - '{{.ETC_NEBULA}}/ca.crt'
-    cmds:
-      - rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml" /tmp/
-      - sudo mkdir -p {{.ETC_NEBULA}}
-      - sudo mv /tmp/ca.crt {{.ETC_NEBULA}}
-      - sudo mv /tmp/{{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
-      - sudo mv /tmp/{{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
-      - sudo mv /tmp/{{.NAME}}.key {{.ETC_NEBULA}}/host.key
-      - sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
+      - rsync "{{.HOST}}.crt" "{{.HOST}}.key" "ca.crt" "{{.TYPE}}.yml" {{.DEST}}
+      - task: conn:{{.CONN}}
+        vars:
+          HOST: '{{.HOST}}'
+          CMD: |
+            sudo mkdir -p {{.ETC_NEBULA}}
+            sudo mv /tmp/ca.crt {{.ETC_NEBULA}}
+            sudo mv /tmp/{{.HOST}}.crt {{.ETC_NEBULA}}/host.crt
+            sudo mv /tmp/{{.HOST}}.key {{.ETC_NEBULA}}/host.key
+            sudo mv /tmp/{{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
+            sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
