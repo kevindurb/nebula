@@ -2,6 +2,8 @@
 ---
 version: '3'
 
+dotenv: [.env]
+
 vars:
   CA_CRT_SECRET: fd5dd252-b961-488c-b34a-b3aa014951fb
   CA_KEY_SECRET: abf538c5-cdb2-454b-a43d-b3aa014961df
