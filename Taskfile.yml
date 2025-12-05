@@ -3,15 +3,24 @@
 version: '3'
 
 vars:
+  SUFFIX: /16
   CHOWN: root:root
   ETC_NEBULA: /etc/nebula
   NODES:
     map:
-      lighthouse-01: 10.10.0.1/16
-      corellia: 10.10.2.1/16
-      tablet: 10.10.2.2/16
-      workmac: 10.10.2.3/16
-      hoth: 10.10.2.4/16
+      lighthouse-01: 10.10.0.1
+      corellia: 10.10.2.1
+      tablet: 10.10.2.2
+      workmac: 10.10.2.3
+      hoth: 10.10.2.4
+      steamdeck: 10.10.2.5
+      unimatrix-01: 10.10.42.11
+      unimatrix-02: 10.10.42.12
+      unimatrix-03: 10.10.42.13
+      drone-01: 10.10.42.21
+      drone-02: 10.10.42.22
+      drone-03: 10.10.42.23
+      drone-04: 10.10.42.24
 
 tasks:
   make:ca:
@@ -28,7 +37,7 @@ tasks:
     vars:
       NAME: '{{ index .MATCH 0 }}'
       IP: '{{ get .NODES .NAME }}'
-    cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}"
+    cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}{{.SUFFIX}}"
 
   deploy-remote:*:
     requires:
@@ -43,11 +52,12 @@ tasks:
         {{.NAME}}:/tmp/
       - |
         ssh {{.NAME}} "
-          sudo mv /tmp/ca.crt /etc/nebula/
-          sudo mv /tmp/{{.NAME}}.crt /etc/nebula/host.crt
-          sudo mv /tmp/{{.NAME}}.key /etc/nebula/host.key
-          sudo mv /tmp/{{.TYPE}}.yml /etc/nebula/config.yml
-          sudo chown -R root:root /etc/nebula
+          sudo mkdir {{.ETC_NEBULA}}
+          sudo mv /tmp/ca.crt {{.ETC_NEBULA}}
+          sudo mv /tmp/{{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
+          sudo mv /tmp/{{.NAME}}.key {{.ETC_NEBULA}}/host.key
+          sudo mv /tmp/{{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
+          sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
           sudo systemctl enable --now nebula
           sudo systemctl restart nebula
         "
@@ -65,9 +75,10 @@ tasks:
       - '{{.ETC_NEBULA}}/host.key'
       - '{{.ETC_NEBULA}}/ca.crt'
     cmds:
+      - rsync "{{.NAME}}.crt" "{{.NAME}}.key" "ca.crt" "{{.TYPE}}.yml" /tmp/
       - sudo mkdir -p {{.ETC_NEBULA}}
-      - sudo cp ca.crt {{.ETC_NEBULA}}
-      - sudo cp {{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
-      - sudo cp {{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
-      - sudo cp {{.NAME}}.key {{.ETC_NEBULA}}/host.key
+      - sudo mv /tmp/ca.crt {{.ETC_NEBULA}}
+      - sudo mv /tmp/{{.TYPE}}.yml {{.ETC_NEBULA}}/config.yml
+      - sudo mv /tmp/{{.NAME}}.crt {{.ETC_NEBULA}}/host.crt
+      - sudo mv /tmp/{{.NAME}}.key {{.ETC_NEBULA}}/host.key
       - sudo chown -R {{.CHOWN}} {{.ETC_NEBULA}}
