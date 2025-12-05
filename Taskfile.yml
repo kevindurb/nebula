@@ -3,6 +3,8 @@
 version: '3'
 
 vars:
+  CA_CRT_SECRET: fd5dd252-b961-488c-b34a-b3aa014951fb
+  CA_KEY_SECRET: abf538c5-cdb2-454b-a43d-b3aa014961df
   SUFFIX: /16
   CHOWN: root:root
   ETC_NEBULA: /etc/nebula
@@ -30,8 +32,23 @@ tasks:
     generates: [ca.crt, ca.key]
     cmd: nebula-cert ca -version 1 -name "Borg Collective"
 
+  fetch:ca:
+    status:
+      - test -f ca.crt
+      - test -f ca.key
+    generates: [ca.crt, ca.key]
+    cmds:
+      - >
+        bws secret get "{{.CA_CRT_SECRET}}"
+        | jq --raw-output .value
+        > ca.crt
+      - >
+        bws secret get "{{.CA_KEY_SECRET}}"
+        | jq --raw-output .value
+        > ca.key
+
   sign:*:
-    deps: [make:ca]
+    deps: [fetch:ca]
     sources: [ca.crt, ca.key]
     generates: ['{{.NAME}}.crt', '{{.NAME}}.key']
     vars:
