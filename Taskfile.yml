@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+---
+version: '3'
+
+vars:
+  NODES:
+    map:
+      lighthouse-01: 10.10.0.1/16
+      corellia: 10.10.2.1/16
+      tablet: 10.10.2.2/16
+      workmac: 10.10.2.3/16
+      hoth: 10.10.2.4/16
+
+tasks:
+  make:ca:
+    cmd: nebula-cert ca -version 1 -name "Borg Collective"
+  sign:*:
+    vars:
+      NAME: '{{ index .MATCH 0 }}'
+      IP: '{{ get .NODES .NAME }}'
+    cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}"
