@@ -5,6 +5,7 @@ version: '3'
 dotenv: [.env]
 
 vars:
+  NEBULA_CERT_ARGS: -version 1
   CA_CRT_SECRET: fd5dd252-b961-488c-b34a-b3aa014951fb
   CA_KEY_SECRET: abf538c5-cdb2-454b-a43d-b3aa014961df
   SUFFIX: /16
@@ -44,7 +45,7 @@ tasks:
       - test -f ca.crt
       - test -f ca.key
     generates: [ca.crt, ca.key]
-    cmd: nebula-cert ca -version 1 -name "Borg Collective"
+    cmd: nebula-cert ca {{.NEBULA_CERT_ARGS}} -name "Borg Collective"
 
   fetch:ca:
     status:
@@ -68,7 +69,7 @@ tasks:
     vars:
       NAME: '{{ index .MATCH 0 }}'
       IP: '{{ get .NODES .NAME }}'
-    cmd: nebula-cert sign -version 1 -name "{{.NAME}}" -ip "{{.IP}}{{.SUFFIX}}"
+    cmd: nebula-cert sign {{.NEBULA_CERT_ARGS}} -name "{{.NAME}}" -ip "{{.IP}}{{.SUFFIX}}"
 
   deploy:*:*:
     requires:
